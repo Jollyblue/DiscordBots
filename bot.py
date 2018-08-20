@@ -448,6 +448,100 @@ async def delhunt(ctx, name: str=None, amount: str=None):
 
 
 @bot.command(pass_context=True)
+async def delete(ctx, name: str=None, amount: str=None):
+    '''delete allows admins to remove items from members
+
+    Usage:
+    !delete <item> <amount> <@mention>
+    eg; !delete spike 8 @user
+    Item names: Neidan, Spike, Coin, Goblet, Skin, Whisker, Fin, Horn, Shell, Steel, Jaw, Tongue, Amethyst
+    '''
+    if ctx.message.author is ctx.message.server.owner or ctx.message.author.id in config.data.get('config'):
+
+        if not name:
+            await bot.say('Please include an item to delete')
+            return
+
+        mention_list = []
+        for mention in ctx.message.mentions:
+            mention_list.append(mention.id)
+
+        if not mention_list:
+            await bot.say('Who are you deleting items from?  Your mom?')
+            return
+
+        if len(mention_list) > 1:
+            await bot.say('Too many mentions, stop trying to break shit and mention only one user.')
+            return
+
+        name = name.lower()
+        if f"{name}s" in Items:
+            name = f"{name}s"
+
+        if name not in Items:
+            await bot.say(f"I can\'t seem to find '{name}' in the item list")
+            return
+
+        else:
+            amount = int(amount)
+            value = Items.get(name)
+            item_cost = int(value) * amount
+            cash_to_give = item_cost
+            cash_to_give = round(cash_to_give)
+            error_break = False
+            for person in mention_list:
+                if person not in config.data.get('users'):
+                    print(f'{person} has been added')
+                    new_user = {"donated": {}, "cash": 0}
+                    config.data['users'][person] = new_user
+
+                users_cash = config.data.get('users').get(person).get('cash')
+                new_users_cash = users_cash - int(cash_to_give)
+                if new_users_cash > -1:
+                    config.data['users'][person]['cash'] = new_users_cash
+                    if name not in config.data.get('users').get(person).get('donated'):
+                        old_item_amount = config.data.get('users').get(person).get('donated').get(name)
+                        new_item_amount = old_item_amount - amount
+                        config.data['users'][person]['donated'][name] = new_item_amount
+                        with open(f'{person}.txt', 'a+', encoding='utf8') as data:
+                            player = ctx.message.server.get_member(person)
+                            now = str(ctx.message.timestamp)
+                            now = now[:-7]
+                            data.write(f'{now}: author: {ctx.message.author.name} !delete {player} {cash_to_give:,}\n')
+                            data.close()
+
+                    else:
+                        old_item_amount = config.data.get('users').get(person).get('donated').get(name)
+                        new_item_amount = old_item_amount - amount
+                        config.data['users'][person]['donated'][name] = new_item_amount
+                        with open(f'{person}.txt', 'a+', encoding='utf8') as data:
+                            player = ctx.message.server.get_member(person)
+                            now = str(ctx.message.timestamp)
+                            now = now[:-7]
+                            data.write(f'{now}: author: {ctx.message.author.name} !delete {player} {cash_to_give:,}\n')
+                            data.close()
+
+                else:
+                    await bot.say(f'It seems you\'d be giving <@{person}> negative money..that doesn\'t seem right..')
+                    error_break = True
+                    break
+
+            config.save()
+            if not error_break:
+                with open(f'admin.txt', 'a+', encoding='utf8') as data:
+                    now = str(ctx.message.timestamp)
+                    now = now[:-7]
+                    data.write(f'{now}: {ctx.message.author.name}: {ctx.message.content}\n')
+                    data.close()
+                await bot.say(f'Users item donations have been removed by ${cash_to_give:,}.')
+                return
+    else:
+        await bot.say(f'{ctx.message.author.mention}, you are not authorized for this command.')
+        return
+
+
+
+@bot.command(pass_context=True)
 async def sailors(ctx):
     '''sailors shows all users who have donated this current period
 
