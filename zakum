@@ -1,0 +1,254 @@
+from discord.ext import commands
+import discord
+import asyncio
+import json
+import pyson
+import datetime
+import time
+
+
+config = pyson.Pyson('data.json')
+token = config.data.get('config').get('token')
+
+
+bot = commands.Bot(command_prefix='!')
+
+
+@bot.event
+async def on_ready():
+    print('Logged in as: '+bot.user.name)
+    print('Bot ID: '+bot.user.id)
+    print('Invite Link Below')
+    print('------')
+    print('https://discordapp.com/oauth2/authorize?client_id={}&scope=bot&permissions=0'.format(bot.user.id))
+    print('------')
+    for server in bot.servers:
+        print("Connected to server: {} with id: {}".format(server, server.id))
+    print('------')
+
+
+async def connect():
+    print('Logging in...')
+    try:
+        await bot.start(token)
+    except:
+        print('Failed to login.')
+        bot.loop.close()
+
+
+@bot.command(pass_context=True)
+async def ping(ctx):
+    """Is the bot alive?"""
+    now = datetime.datetime.utcnow()
+    old_message = now - ctx.message.timestamp
+    old_delta = old_message.microseconds
+    milsec_old = int(old_delta // 1000)
+    test_message = await bot.say(f"Checking delay {milsec_old}")
+    new_time = now - test_message.timestamp
+    delta = new_time.microseconds
+    milsec = int(delta // 1000)
+    await bot.edit_message(test_message, new_content=f'{milsec}ms round trip time from my message until response.')
+
+
+@bot.command(pass_context=True)
+async def rl(ctx, role_name: str=None):
+    role_count = 0
+    role_name_list = {'alpha': 'Alpha', 'beta': 'Beta', 'Alpha': 'Alpha', 'Beta': 'Beta'}
+
+    if role_name in role_name_list:
+        role_name = role_name_list.get(role_name)
+
+    rolelist = list(role.name for role in ctx.message.server.roles)
+    if role_name in rolelist:
+        for member in ctx.message.server.members:
+            get_roles = ctx.message.server.get_member(member.id)
+            for x in get_roles.roles:
+                if x.name == role_name:
+                    role_count += 1
+
+        await bot.say(f"there are {role_count} users with the role {role_name}")
+        return
+
+    else:
+        await bot.say('role not found.')
+        return
+
+
+@bot.command(pass_context=True)
+async def join(ctx, role_name: str=None):
+    """!join Alpha or Beta to join a party for Zakum"""
+    role_name_list = {'alpha': 'Alpha', 'beta': 'Beta', 'Alpha': 'Alpha', 'Beta': 'Beta'}
+
+    if not role_name:
+        await bot.say('You did not include a group name to join')
+        return
+
+    if role_name in role_name_list:
+        role_name = role_name_list.get(role_name)
+
+    if role_name not in role_name_list:
+        await bot.say('Alpha or Beta, you have to pick one!')
+        return
+
+    author_roles = ctx.message.server.get_member(ctx.message.author.id)
+    for role in author_roles.roles:
+        if role.name in role_name_list:
+            await bot.say('You are already in a group fool!.')
+            return
+
+    role_count = 0
+    for member in ctx.message.server.members:
+        get_roles = ctx.message.server.get_member(member.id)
+        for x in get_roles.roles:
+            if x.name == role_name:
+                role_count += 1
+
+    if role_count >= 10:
+        await bot.say('Too many users in that group buddy, better luck next time!  Try another group')
+        return
+
+    else:
+        role = discord.utils.get(ctx.message.server.roles, name=role_name)
+        await bot.add_roles(ctx.message.author, role)
+        await bot.say('You have been added!  Try not to die.')
+        return
+
+
+@bot.command(pass_context=True)
+async def leave(ctx):
+    """Leave the party, chicken!"""
+    role_name_list = {'alpha': 'Alpha', 'beta': 'Beta', 'Alpha': 'Alpha', 'Beta': 'Beta'}
+    role_to_remove = ''
+
+    author_roles = ctx.message.server.get_member(ctx.message.author.id)
+    for role in author_roles.roles:
+        if role.name in role_name_list:
+            role_to_remove = role.name
+
+    if role_to_remove:
+        role = discord.utils.get(ctx.message.server.roles, name=role_to_remove)
+        await bot.remove_roles(ctx.message.author, role)
+        await bot.say('You have left the party, coward.')
+        return
+    else:
+        await bot.say('not in a role cheese sniffer')
+        return
+
+
+@bot.command(pass_context=True)
+async def pat(ctx):
+    """Pat someone via @Mention"""
+    if not ctx.message.raw_mentions:
+        await bot.say('No mentions')
+        return
+    else:
+        if len(ctx.message.raw_mentions) > 1:
+            await bot.say('too many mentions')
+            return
+
+        person_to_mention = ctx.message.server.get_member(ctx.message.raw_mentions[0])
+        if person_to_mention.id == bot.user.id:
+            await bot.say(f'{ctx.message.author.mention} gave me a head pat.. Im not blushing you are!')
+            return
+
+        else:
+            await bot.say(f'Hey {person_to_mention.mention}, {ctx.message.author.mention} gave your head a pat. '
+                          f'You must have done something nice.. Wish I got pats!')
+            return
+
+
+@bot.command(pass_context=True)
+async def group(ctx, role_name: str=None):
+    """Use !group Alpha or Beta to see who is in that party"""
+    role_name_list = {'alpha': 'Alpha', 'beta': 'Beta', 'Alpha': 'Alpha', 'Beta': 'Beta'}
+
+    if role_name in role_name_list:
+        role_name = role_name_list.get(role_name)
+
+    rolelist = list(role.name for role in ctx.message.server.roles)
+    if role_name in rolelist:
+        role_count = ''
+        role_number = 0
+        for member in ctx.message.server.members:
+            get_roles = ctx.message.server.get_member(member.id)
+            for x in get_roles.roles:
+                if x.name == role_name:
+                    role_number += 1
+                    role_count += f'{get_roles.display_name} \n'
+
+        if role_count:
+            embed = discord.Embed(title=f"Role: '{role_name}' Users: {role_number }/10", colour=discord.Colour(0x278d89))
+            embed.add_field(name='Users in Role', value=role_count)
+            await bot.say(embed=embed)
+            return
+        else:
+            await bot.say('nothing to show!')
+
+    else:
+        await bot.say('role not found.')
+        return
+
+
+@bot.command(pass_context=True)
+async def slap(ctx):
+    """Slap someone"""
+    if not ctx.message.raw_mentions:
+        await bot.say('No mentions')
+        return
+    else:
+        if len(ctx.message.raw_mentions) > 1:
+            await bot.say('too many mentions')
+            return
+        else:
+            person_to_mention = ctx.message.server.get_member(ctx.message.raw_mentions[0])
+            await bot.say(f'Hey {person_to_mention.mention}, {ctx.message.author.mention} just slapped you. Fight them!'
+                          f'')
+            return
+
+
+@bot.command(pass_context=True)
+async def lewds(ctx):
+    """Want lewds?"""
+    await bot.say(f'No Lewds {ctx.message.author.mention}, only head pats!')
+    return
+
+
+@bot.command(pass_context=True)
+async def remove(ctx, role_name: str = None, member: str = None):
+    """Use !remove role member to remove a role from a user"""
+    role_name_list = {'alpha': 'Alpha', 'beta': 'Beta', 'Alpha': 'Alpha', 'Beta': 'Beta'}
+    if ctx.message.author != ctx.message.server.owner:
+        return
+
+    if not role_name or not member:
+        await bot.say('garbage, use !help remove')
+        return
+
+    if not ctx.message.raw_mentions:
+        await bot.say('no mentions')
+        return
+
+    if role_name in role_name_list:
+        role_name = role_name_list.get(role_name)
+
+    get_roles = ctx.message.server.get_member(ctx.message.raw_mentions[0])
+    for x in get_roles.roles:
+        if x.name == role_name:
+            role_object = discord.utils.get(ctx.message.server.roles, name=x.name)
+            await bot.remove_roles(get_roles, role_object)
+            await bot.say('User has been removed.')
+            return
+    else:
+        await bot.say('user doesnt seem to have that role')
+        return
+
+
+def start_bot():
+    while not bot.is_closed:
+        try:
+            bot.loop.run_until_complete(connect())
+        except:
+            time.sleep(90)
+
+
+start_bot()
