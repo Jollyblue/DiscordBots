@@ -1,0 +1,136 @@
+from discord.ext import commands
+import discord
+import asyncio
+import pyson
+import os, errno
+import datetime
+import time
+
+config = pyson.Pyson('data.json')
+token = config.data.get('config').get('token')
+
+bot = commands.Bot(command_prefix='!')
+
+
+@bot.event
+async def on_ready():
+    print('Logged in as: ' + bot.user.name)
+    print('Bot ID: ' + bot.user.id)
+
+
+async def connect():
+    print('Logging in...')
+    try:
+        await bot.start(token)
+    except:
+        print('Failed to login.')
+        bot.loop.close()
+
+
+@bot.command(pass_context=True)
+async def ping(ctx):
+    """Ping the bot to see if its alive"""
+    now = datetime.datetime.utcnow()
+    old_message = now - ctx.message.timestamp
+    old_delta = old_message.microseconds
+    milsec_old = int(old_delta // 1000)
+    test_message = await bot.say(f"Checking delay {milsec_old}")
+    new_time = now - test_message.timestamp
+    delta = new_time.microseconds
+    milsec = int(delta // 1000)
+    await bot.edit_message(test_message, new_content=f'{milsec}ms round trip time from my message until response.')
+
+
+role_name_list = ["Alpha", "Beta", "Delta", "Omega"]
+
+
+@bot.event
+async def on_message(message):
+    if message.channel.name == 'wait-list' and 'I have read the rules' in message.content:
+        await bot.add_roles(message.author, discord.utils.get(message.server.roles, id='497564508617703424'))
+        await bot.send_message(message.channel, f'You are now verified, thank you!')
+    await bot.process_commands(message)
+
+
+@bot.command(pass_context=True)
+async def add(ctx, *, user_input: str=None):
+    """!add [role] to add a role to yourself."""
+    user_input = user_input.lower()
+    if user_input not in role_name_list:
+        await bot.say(f'"{user_input}" is not an available role, please use !rolelist to see available roles.')
+        return
+
+    elif user_input in role_name_list:
+        for role in ctx.message.author.roles:
+            if role.name.lower() == user_input:
+                await bot.say(f'You already have "{user_input}" added.')
+                return
+
+        for role in ctx.message.server.roles:
+            if role.name.lower() == user_input:
+                await bot.add_roles(ctx.message.author, role)
+                await bot.say(f'{role.name} added to {ctx.message.author.mention}')
+
+
+@bot.command(pass_context=True)
+async def remove(ctx, *, user_input: str = None):
+    """!remove [role] to remove yourself from a role."""
+    user_input = user_input.lower()
+
+    if user_input not in role_name_list:
+                await bot.say(f'{user_input} is not a role you can remove, try again')
+
+    elif user_input in role_name_list:
+        for role in ctx.message.author.roles:
+            if role.name.lower() == user_input:
+                await bot.remove_roles(ctx.message.author, role)
+                await bot.say(f'{user_input} has been removed from {ctx.message.author.mention}')
+                return
+        await bot.say(f'{user_input} is not a role you have, try again.')
+
+
+@bot.command()
+async def credits():
+    """Who made me?"""
+    await bot.say(f'My creator is .Ace.#0001 - Made for their friend, VOIDARCANE#1137.')
+    return
+
+
+@bot.command()
+async def rolelist():
+    """What are the roles?"""
+    await bot.say(f'alpha, beta, delta, omega')
+    return
+
+
+@bot.command(pass_context=True)
+async def pat(ctx):
+    """Pat someone"""
+    if not ctx.message.raw_mentions:
+        await bot.say('No mentions')
+        return
+    else:
+        if len(ctx.message.raw_mentions) > 1:
+            await bot.say('Too many mentions')
+            return
+
+        person_to_mention = ctx.message.server.get_member(ctx.message.raw_mentions[0])
+        if person_to_mention.id == bot.user.id:
+            await bot.say(f'{ctx.message.author.mention} gave me a head pat.. Im not blushing you are!')
+            return
+
+        else:
+            await bot.say(f'Hey {person_to_mention.mention}, {ctx.message.author.mention} gave your head a pat. '
+                          f'You must have done something nice.. Wish I got pats!')
+            return
+
+
+def start_bot():
+    while not bot.is_closed:
+        try:
+            bot.loop.run_until_complete(connect())
+        except:
+            time.sleep(90)
+
+
+start_bot()
